@@ -55,7 +55,7 @@ def parse_money(value: str) -> float:
 def is_money(value: str) -> bool:
     return bool(
         re.fullmatch(
-            r"(?:RM)?\s*-?\d{1,3}(?:,\d{3})*(?:\.\d{2})|-?\d+(?:\.\d{2})",
+            r"(?:RM)?\s*-?(?:\d{1,3}(?:,\d{3})*|\d+)(?:\.\d{1,2})",
             value.strip(),
         )
     )
@@ -177,9 +177,11 @@ def parse_table_items(table_lines: list[str]) -> Iterable[tuple[str, float, floa
     while cursor < len(table_lines):
         found = False
 
-        for index in range(cursor, len(table_lines) - 2):
+        for index in range(cursor, len(table_lines) - 1):
+            # Normal case: QTY, RATE, AMOUNT
             if (
-                is_quantity(table_lines[index])
+                index + 2 < len(table_lines)
+                and is_quantity(table_lines[index])
                 and is_money(table_lines[index + 1])
                 and is_money(table_lines[index + 2])
             ):
@@ -192,6 +194,23 @@ def parse_table_items(table_lines: list[str]) -> Iterable[tuple[str, float, floa
                     yield item_description, quantity, unit_price
 
                 cursor = index + 3
+                found = True
+                break
+
+            # Void invoice case: QTY, RATE only
+            if (
+                is_quantity(table_lines[index])
+                and is_money(table_lines[index + 1])
+            ):
+                item_lines = table_lines[cursor:index]
+                item_description = activity_from_item_lines(item_lines)
+                quantity = parse_money(table_lines[index])
+                unit_price = parse_money(table_lines[index + 1])
+
+                if item_description:
+                    yield item_description, quantity, unit_price
+
+                cursor = index + 2
                 found = True
                 break
 
